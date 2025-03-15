@@ -1,0 +1,8 @@
+torch
+streamlit
+transformers
+wikipedia-api
+networkx
+matplotlib
+pandas
+seaborn
