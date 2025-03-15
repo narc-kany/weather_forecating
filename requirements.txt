@@ -3,3 +3,7 @@ streamlit
 transformers
 sentencepiece
 wikipedia
+networkx
+matplotlib
+pandas
+seaborn
