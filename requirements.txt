@@ -1,13 +1,8 @@
 torch
 streamlit
 transformers
-sentencepiece
 wikipedia
 networkx
 matplotlib
 pandas
 seaborn
-scipy
-sklearn
-scikit-learn
-nltk
