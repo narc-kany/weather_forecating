@@ -120,5 +120,5 @@ Happy forecasting! 🌤️🌧️🌪️
 --- 
 
 📌 **Live Demo**: [Weather Forecasting Site](https://github.com/narc-kany/weather_forecating.git)  
-📧 **Contact**: [Your Email]  
-🐦 **Follow Me**: [[Your Social Media Links](https://www.linkedin.com/in/sivaneshs/)]
+📧 **Medium**: [[Article](https://medium.com/@sivanesh.developer69/cache-augmented-generation-cag-knowledge-augmented-generation-kag-and-graphrag-the-future-of-bfc04d62cfae)]  
+🐦 **Follow Me**: [[LinkedIn](https://www.linkedin.com/in/sivaneshs/)]
