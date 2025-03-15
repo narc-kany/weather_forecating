@@ -8,6 +8,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from nltk.translate.bleu_score import sentence_bleu
+from rouge import Rouge
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Load the model and tokenizer
 def load_model():
@@ -59,6 +63,23 @@ def calculate_correlation(generated_text, reference_texts):
     similarity = SequenceMatcher(None, generated_text, combined_reference_text).ratio()
     return round(similarity * 100, 2)
 
+# Additional Evaluation Metrics
+def calculate_bleu(generated_text, reference_texts):
+    reference = [ref.split() for ref in reference_texts]
+    candidate = generated_text.split()
+    return sentence_bleu(reference, candidate) * 100
+
+def calculate_rouge(generated_text, reference_texts):
+    rouge = Rouge()
+    scores = rouge.get_scores(generated_text, " ".join(reference_texts))
+    return scores[0]['rouge-l']['f'] * 100
+
+def calculate_cosine_similarity(generated_text, reference_texts):
+    vectorizer = TfidfVectorizer()
+    vectors = vectorizer.fit_transform([generated_text] + reference_texts)
+    cosine_sim = cosine_similarity(vectors[0:1], vectors[1:])
+    return cosine_sim.mean() * 100
+
 # Function to generate text with cache augmentation
 def generate_with_cache(query, max_length=1024, max_new_tokens=150):
     relevant_texts = retrieve_from_cache(query)
@@ -67,42 +88,7 @@ def generate_with_cache(query, max_length=1024, max_new_tokens=150):
     with torch.no_grad():
         outputs = model.generate(inputs, max_new_tokens=max_new_tokens, no_repeat_ngram_size=3, temperature=0.6, top_p=0.95, top_k=50, pad_token_id=tokenizer.pad_token_id)
     generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    correlation_percentage = calculate_correlation(generated_text, relevant_texts)
-    return generated_text, correlation_percentage
-
-# Function to generate text with knowledge augmentation
-def generate_with_knowledge(query, max_length=1024, max_new_tokens=150):
-    knowledge_text = retrieve_knowledge(query)
-    context = "Here is relevant knowledge: " + knowledge_text + "\nUser Query: " + query
-    inputs = tokenizer.encode(context, return_tensors="pt", truncation=True, max_length=max_length)
-    with torch.no_grad():
-        outputs = model.generate(inputs, max_new_tokens=max_new_tokens, no_repeat_ngram_size=3, temperature=0.6, top_p=0.95, top_k=50, pad_token_id=tokenizer.pad_token_id)
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    correlation_percentage = calculate_correlation(generated_text, [knowledge_text])
-    return generated_text, correlation_percentage
-
-# Function to generate text using GraphRAG
-def generate_with_graph_rag(query):
-    G = nx.Graph()
-    knowledge_text = retrieve_knowledge(query)
-    relevant_texts = retrieve_from_cache(query)
-    all_texts = [query] + relevant_texts + [knowledge_text]
-    for i, text in enumerate(all_texts):
-        G.add_node(i, text=text)
-        for j in range(i):
-            similarity = SequenceMatcher(None, text, all_texts[j]).ratio()
-            G.add_edge(i, j, weight=similarity)
-    
-    central_nodes = sorted(G.nodes, key=lambda x: nx.degree(G, x), reverse=True)[:3]
-    context = " ".join([G.nodes[n]['text'] for n in central_nodes])
-    context += "\nUser Query: " + query
-    
-    inputs = tokenizer.encode(context, return_tensors="pt", truncation=True, max_length=1024)
-    with torch.no_grad():
-        outputs = model.generate(inputs, max_new_tokens=150, no_repeat_ngram_size=3, temperature=0.6, top_p=0.95, top_k=50, pad_token_id=tokenizer.pad_token_id)
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    correlation_percentage = calculate_correlation(generated_text, all_texts)
-    return generated_text, correlation_percentage, G
+    return generated_text, calculate_correlation(generated_text, relevant_texts), calculate_bleu(generated_text, relevant_texts), calculate_rouge(generated_text, relevant_texts), calculate_cosine_similarity(generated_text, relevant_texts)
 
 # Streamlit UI
 st.title("CAG vs KAG vs GraphRAG AI Text Generator")
@@ -112,32 +98,16 @@ generate_button = st.button("Generate Response")
 if generate_button:
     if query:
         add_to_cache(query)
-        cag_response, cag_correlation = generate_with_cache(query)
-        kag_response, kag_correlation = generate_with_knowledge(query)
-        graph_response, graph_correlation, graph = generate_with_graph_rag(query)
+        cag_response, cag_correlation, cag_bleu, cag_rouge, cag_cosine = generate_with_cache(query)
         
-        st.subheader("Cache-Augmented Response (CAG):")
-        st.write(cag_response)
-        st.write(f"Correlation with Cache: {cag_correlation}%")
+        # Visualization
+        data = pd.DataFrame({
+            "Metric": ["Correlation", "BLEU", "ROUGE-L", "Cosine Similarity"],
+            "CAG": [cag_correlation, cag_bleu, cag_rouge, cag_cosine]
+        })
         
-        st.subheader("Knowledge-Augmented Response (KAG):")
-        st.write(kag_response)
-        st.write(f"Correlation with External Knowledge: {kag_correlation}%")
-        
-        st.subheader("Graph-RAG Response:")
-        st.write(graph_response)
-        st.write(f"Correlation with Knowledge Graph: {graph_correlation}%")
-        
-        # Generate visualization
-        plt.figure(figsize=(8, 6))
-        pos = nx.spring_layout(graph)
-        nx.draw(graph, pos, with_labels=True, node_color='skyblue', edge_color='gray', node_size=2000, font_size=10)
-        st.pyplot(plt)
-        
-        # Correlation comparison chart
-        data = pd.DataFrame({"Method": ["CAG", "KAG", "GraphRAG"], "Correlation (%)": [cag_correlation, kag_correlation, graph_correlation]})
         fig, ax = plt.subplots()
-        sns.barplot(x="Method", y="Correlation (%)", data=data, ax=ax)
+        sns.barplot(x="Metric", y="CAG", data=data, ax=ax)
         st.pyplot(fig)
     else:
         st.warning("Please enter a query.")
