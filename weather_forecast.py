@@ -43,7 +43,7 @@ def generate_with_cache(query, max_length=1024, max_new_tokens=150):
     relevant_texts = retrieve_from_cache(query)
     
     # Combine retrieved cache with query
-    context = " ".join(relevant_texts) + " " + query
+    context = "Here is relevant context: " + " ".join(relevant_texts) + "\nUser Query: " + query
     
     # Tokenize input
     inputs = tokenizer.encode(context, return_tensors="pt", truncation=True, max_length=max_length)
@@ -53,9 +53,9 @@ def generate_with_cache(query, max_length=1024, max_new_tokens=150):
         outputs = model.generate(
             inputs,
             max_new_tokens=max_new_tokens,
-            no_repeat_ngram_size=2,
-            temperature=0.7,
-            top_p=0.9,
+            no_repeat_ngram_size=3,
+            temperature=0.6,
+            top_p=0.95,
             top_k=50,
             pad_token_id=tokenizer.pad_token_id
         )
