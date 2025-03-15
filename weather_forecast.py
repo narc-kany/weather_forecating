@@ -3,6 +3,7 @@ import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from collections import deque
 from difflib import SequenceMatcher
+import wikipedia
 
 # Load the model and tokenizer
 def load_model():
@@ -38,10 +39,20 @@ def add_to_cache(text):
 def retrieve_from_cache(query, k=3):
     return list(cache)[-k:]
 
-# Function to calculate similarity between cache and generated response
-def calculate_correlation(generated_text, cache):
-    combined_cache_text = " ".join(cache)
-    similarity = SequenceMatcher(None, generated_text, combined_cache_text).ratio()
+# Function to retrieve knowledge from Wikipedia
+def retrieve_knowledge(query):
+    try:
+        summary = wikipedia.summary(query, sentences=2)
+        return summary
+    except wikipedia.exceptions.DisambiguationError as e:
+        return "Multiple topics found: " + ", ".join(e.options[:3])
+    except wikipedia.exceptions.PageError:
+        return "No relevant Wikipedia page found."
+
+# Function to calculate similarity between cache/knowledge and generated response
+def calculate_correlation(generated_text, reference_texts):
+    combined_reference_text = " ".join(reference_texts)
+    similarity = SequenceMatcher(None, generated_text, combined_reference_text).ratio()
     return round(similarity * 100, 2)
 
 # Function to generate text with cache augmentation
@@ -60,9 +71,9 @@ def generate_with_cache(query, max_length=1024, max_new_tokens=150):
         outputs = model.generate(
             inputs,
             max_new_tokens=max_new_tokens,
-            no_repeat_ngram_size=3,  # Reduce repetition further
-            temperature=0.6,  # More controlled randomness
-            top_p=0.95,  # Increase sampling diversity
+            no_repeat_ngram_size=3,
+            temperature=0.6,
+            top_p=0.95,
             top_k=50,
             pad_token_id=tokenizer.pad_token_id
         )
@@ -75,9 +86,40 @@ def generate_with_cache(query, max_length=1024, max_new_tokens=150):
     
     return generated_text, correlation_percentage
 
+# Function to generate text with knowledge augmentation
+def generate_with_knowledge(query, max_length=1024, max_new_tokens=150):
+    # Retrieve external knowledge
+    knowledge_text = retrieve_knowledge(query)
+    
+    # Combine knowledge with query
+    context = "Here is relevant knowledge: " + knowledge_text + "\nUser Query: " + query
+    
+    # Tokenize input
+    inputs = tokenizer.encode(context, return_tensors="pt", truncation=True, max_length=max_length)
+    
+    # Generate response
+    with torch.no_grad():
+        outputs = model.generate(
+            inputs,
+            max_new_tokens=max_new_tokens,
+            no_repeat_ngram_size=3,
+            temperature=0.6,
+            top_p=0.95,
+            top_k=50,
+            pad_token_id=tokenizer.pad_token_id
+        )
+    
+    # Decode generated text
+    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    
+    # Calculate correlation percentage
+    correlation_percentage = calculate_correlation(generated_text, [knowledge_text])
+    
+    return generated_text, correlation_percentage
+
 # Streamlit UI
-st.title("Cache-Augmented AI Text Generator")
-st.write("This AI generates responses based on both new queries and cached knowledge.")
+st.title("Cache vs. Knowledge Augmented AI Text Generator")
+st.write("This AI generates responses using both cached knowledge (CAG) and external knowledge (KAG).")
 
 query = st.text_area("Enter your query:")
 generate_button = st.button("Generate Response")
@@ -85,11 +127,16 @@ generate_button = st.button("Generate Response")
 if generate_button:
     if query:
         add_to_cache(query)
-        response, correlation = generate_with_cache(query)
-        st.subheader("Generated Response:")
-        st.write(response)
-        st.subheader("Correlation with Cache:")
-        st.write(f"{correlation}% similar to cached knowledge.")
+        cag_response, cag_correlation = generate_with_cache(query)
+        kag_response, kag_correlation = generate_with_knowledge(query)
+        
+        st.subheader("Cache-Augmented Response (CAG):")
+        st.write(cag_response)
+        st.write(f"Correlation with Cache: {cag_correlation}%")
+        
+        st.subheader("Knowledge-Augmented Response (KAG):")
+        st.write(kag_response)
+        st.write(f"Correlation with External Knowledge: {kag_correlation}%")
     else:
         st.warning("Please enter a query.")
 
