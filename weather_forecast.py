@@ -141,3 +141,8 @@ if generate_button:
         st.pyplot(fig)
     else:
         st.warning("Please enter a query.")
+# Display cache content
+if st.checkbox("Show Cache Content"):
+    st.subheader("Current Cache")
+    for idx, entry in enumerate(cache):
+        st.write(f"{idx+1}. {entry}")
