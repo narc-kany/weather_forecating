@@ -9,6 +9,5 @@ pandas
 seaborn
 scipy
 sklearn
-wikipedia-api
 scikit-learn
 nltk
