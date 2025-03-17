@@ -1,7 +1,7 @@
 torch
 streamlit
 transformers
-wikipedia-api
+wikipedia
 networkx
 matplotlib
 pandas
